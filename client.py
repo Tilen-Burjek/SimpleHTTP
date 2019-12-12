@@ -3,6 +3,7 @@
 import asyncio, sys, random, time, requests, threading
 
 keep_running = True
+keep_running_lock = threading.Lock()
 
 
 async def process(id):
@@ -12,7 +13,7 @@ async def process(id):
     :return: None
     """
     r = requests.get(f"http://127.0.0.1:5000/?clientId={id}")
-    time.sleep(random.random())
+    time.sleep(random.uniform(0.1, 0.2))
 
 
 def get_input():
@@ -22,7 +23,11 @@ def get_input():
     """
     global keep_running
     input("Press enter to stop \n")
-    keep_running = False
+    keep_running_lock.acquire()
+    try:
+        keep_running = False
+    finally:
+        keep_running_lock.release()
 
 
 async def main():
@@ -31,13 +36,18 @@ async def main():
     :return:
     """
     global number_of_clients, keep_running
-    while keep_running:
+    while True:
         tasks = []
         for i in range(int(number_of_clients)):
             tasks.append(asyncio.ensure_future(process(i)))
         await asyncio.gather(*tasks)
-        if not keep_running:
-            print("Stopping clients")
+        keep_running_lock.acquire()
+        try:
+            if not keep_running:
+                print("Stopping clients")
+                break
+        finally:
+            keep_running_lock.release()
 
 
 if __name__ == "__main__":

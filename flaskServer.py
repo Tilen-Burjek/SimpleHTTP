@@ -1,9 +1,12 @@
+import threading, time
+
 from flask import Flask, request, g, Response
 import time
 
 app = Flask(__name__)
 
 req_count = dict()
+req_count_lock = threading.Lock()
 
 @app.before_request
 def before_request():
@@ -31,20 +34,30 @@ def check_attempt_number(timestamp, client_id):
     :return: True (200 Response) | False (503 Response)
     """
     global req_count
-    if client_id in req_count:
-        if timestamp - req_count[client_id][0] < 5:
-            if req_count[client_id][1] >= 5:
-                return False
+    req_count_lock.acquire()
+    try:
+        if client_id in req_count:
+            if timestamp - req_count[client_id][0] < 5:
+                if len(req_count[client_id]) >= 5:
+                    return False
+                else:
+                    req_count[client_id].append(timestamp)
+                    return True
             else:
-                req_count[client_id][1] += 1
+                req_count[client_id] = req_count[client_id][1:]
+                req_count[client_id].append(timestamp)
                 return True
         else:
-            req_count[client_id] = [timestamp, 1]
+            req_count[client_id] = [timestamp]
             return True
-    else:
-        req_count[client_id] = [timestamp, 1]
-        return True
+    finally:
+        req_count_lock.release()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, threaded=True)
+
+
+# dict[key] = [0,1,2,3]
+# dict[key] = [timestamp, requestCoutner]
+
